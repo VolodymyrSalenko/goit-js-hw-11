@@ -1,83 +1,110 @@
-import Notiflix from 'notiflix';
-import { fetchCountries } from './fetchCountries.js';
+import { Notify } from 'notiflix';
+import SimpleLightbox from "simplelightbox";
+import { fetchImges } from './fetchImges.js';
 import './css/styles.css';
+import "simplelightbox/dist/simple-lightbox.min.css";
 
-const inputSearchEl = document.getElementById('search-box');
-const listCountryEl = document.querySelector('.country-list');
-const infoCountryEl = document.querySelector('.country-info');
+let incrementPage = 1;
+let totalHits = 0;
+let inputData = null;
 
+Notify.init({
+  timeout: 2000,
+  clickToClose: true,
+});
 
-inputSearchEl.addEventListener('input', debounce(onSearchCountry, DEBOUNCE_DELAY));
+const galleryEl = document.querySelector('.gallery');
+const formEl = document.getElementById('search-form');
+const btnLoadMoreEl = document.querySelector('.load-more');
 
-function onSearchCountry(e) {
-    const nameCountry = e.target.value.trim();
-    if (nameCountry === '') {
-        clearMarkup();
+formEl.addEventListener('submit', onSearch);
+
+async function onSearch(e) {
+    e.preventDefault();
+    
+    btnLoadMoreEl.classList.add('is-hidden');
+    galleryEl.innerHTML = "";
+    incrementPage = 1;
+    totalHits = 0;
+
+    inputData = e.currentTarget.searchQuery.value.trim();
+    const fetch = await fetchImges(inputData, incrementPage);
+
+    if (fetch.totalHits !== 0) {
+        Notify.info(`Hooray! We found ${fetch.totalHits} images.`);
+    };
+
+    onValidationTotalImg(fetch);
+    btnLoadMoreEl.addEventListener('click', onLoadMore);
+};
+
+async function onLoadMore() {
+    incrementPage += 1;
+    const fetch = await fetchImges(inputData, incrementPage);
+
+    onValidationTotalImg(fetch);
+};
+
+function onMarkupGallery(imgArray) {
+    const markupGallery = imgArray.map(({ webformatURL, tags, likes, views, comments, downloads, largeImageURL }) => {
+    return `<div class="photo-card">
+                <a class="gallery__item" href="${largeImageURL}">
+                    <img class="gallery__image" src="${webformatURL}" alt="${tags}" loading="lazy"/>
+                    <div class="info">
+                    <p class="info-item">
+                        <b>Likes:</b>${likes}
+                    </p>
+                    <p class="info-item">
+                        <b>Views</b>${views}
+                    </p>
+                    <p class="info-item">
+                        <b>Comments</b>${comments}
+                    </p>
+                    <p class="info-item">
+                        <b>Downloads</b>${downloads}
+                    </p>
+                    </div>
+                </a>
+            </div>`
+    }).join('');
+
+    galleryEl.insertAdjacentHTML('beforeend', markupGallery);
+    
+    const lightbox = new SimpleLightbox('.gallery a', {
+        captionDelay: 250,
+        captions: true,
+        captionsData: 'alt',
+    }).refresh();
+
+    onScroll()
+};
+
+const onValidationTotalImg = (data) => {
+
+    if (data.hits.length === 0) {
+        Notify.failure(`Sorry, there are no images matching your search query. Please try again.`);
         return;
     };
-    
-    fetchCountries(nameCountry)
-    .then(data => {
-        const countCountry = data.length;
 
-        if (countCountry > 10) {
-            clearMarkup();
-            Notiflix.Notify.info('Too many matches found. Please enter a more specific name.');
-        }
-        else if (countCountry >= 2 && countCountry <= 10) { renderListCountry(data) }
-        else { renderCountry(data) };
-    })
-    .catch(catchEror);
+    totalHits += data.hits.length;
 
-};
+    if (data.totalHits === totalHits) {
+        btnLoadMoreEl.classList.add('is-hidden');
+        Notify.info(`Were sorry, but you've reached the end of search results.`);
+    } else {
+        btnLoadMoreEl.classList.remove('is-hidden');
+    };
 
-function renderListCountry(data) {
+    onMarkupGallery(data.hits);
+  };
 
-    const listCountry = data.map(country => {
-        const { name: { common: nameCountry },
-            flags: { svg: flagCountry, alt: textFlag } } = country;
-        
-        return `<li class="country-item">
-                    <img width = "50" src=${flagCountry} alt="${textFlag}" />
-                    <h2 class="country-name">${nameCountry}</h2>
-                </li>`
-    }).join('');
-
-    clearMarkup();    
-    listCountryEl.innerHTML = listCountry;
-};
-
-function renderCountry(data) {
-    const infoCountry = data.map(country => {
-        const {
-            name: { common: nameCountry },
-            flags: { svg: flagCountry, alt: textFlag },
-            languages,
-            population,
-            capital
-        } = country;
-    
-        return `<div class="base-info">
-                    <img width = "70" src=${flagCountry} alt="${textFlag}" />
-                    <h2 class="name-country">${nameCountry}</h2>
-                </div>
-                <ul class="list-param">
-                    <li class="item-param"><span class="name-param">Capital: </span>${capital.join(', ')}</li>
-                    <li class="item-param"><span class="name-param">Population: </span>${population}</li>
-                    <li class="item-param"><span class="name-param">Languages: </span>${Object.values(languages).join(', ')}</li>
-                </ul>`
-    }).join('');
-
-    clearMarkup();    
-    infoCountryEl.innerHTML = infoCountry;
-};
-
-function catchEror() {
-    clearMarkup();
-    Notiflix.Notify.failure('Oops, there is no country with that name');
-};
-
-function clearMarkup() {
-    infoCountryEl.innerHTML = '';
-    listCountryEl.innerHTML = '';   
+function onScroll() {
+    if (incrementPage < 2) {
+        return
+    };
+    const cardHeight = galleryEl.firstElementChild.getBoundingClientRect();
+    window.scrollBy({
+        top: cardHeight.height * 2.5,
+        behavior: "smooth",
+    });
 };
