@@ -2,6 +2,7 @@ import Notiflix from 'notiflix';
 import { fetchCountries } from './fetchCountries.js';
 import './css/styles.css';
 
+const DEBOUNCE_DELAY = 300;
 const inputSearchEl = document.getElementById('search-box');
 const listCountryEl = document.querySelector('.country-list');
 const infoCountryEl = document.querySelector('.country-info');
